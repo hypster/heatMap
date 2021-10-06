@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    .cell {
+      /* width: 2px;
+      height: 20px; */
+    }
+
+    .box {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+    }
+
+    .container {
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+      /* width: 800px; */
+      margin: 0 auto;
+    }
+    .container #title {
+      text-align: center;
+    }
+
+    svg {
+      position: relative;
+      /* z-index: 2; */
+    }
+
+    #tooltip {
+      position: absolute;
+      display: inline-block;
+      left: 0;
+      top: 0;
+      width: fit-content;
+      opacity: 0;
+      padding: 1em;
+      border-radius: 1em;
+      background-color: lightskyblue;
+      z-index: 1;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container"></div>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+  <script>
+    fetch('https://raw.githubusercontent.com/freeCodeCamp/ProjectReferenceData/master/global-temperature.json')
+      .then(res => {
+        if (res.status == 200) {
+          return res.json()
+        } else {
+          throw new Error('server error')
+        }
+      })
+      .then(data => {
+        console.log(data)
+        main(data)
+      })
+
+    function main(data) {
+
+      let p = 60
+      let w = 1200 - 2 * p
+      let h = 500 - 2 * p
+
+      let months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+      let base = data.baseTemperature
+      data = data.monthlyVariance
+      let _min = d3.min(data, d => d.variance)
+      let _max = d3.max(data, d => d.variance)
+      console.log(_min, _max)
+      let numColors = 10
+      let range = (_max - _min) / numColors
+
+
+
+      data.forEach(d => {
+        let idx = Math.floor((d.variance + -_min) / range)
+        d['idx'] = idx
+      })
+
+      let minYear = d3.min(data, d => d.year)
+      let maxYear = d3.max(data, d => d.year)
+
+      let xScale = d3.scaleLinear()
+        .domain([minYear, maxYear])
+        .range([0, w])
+
+      let rectWidth = w / (maxYear - minYear)
+
+      let yScale = d3.scaleBand()
+        .domain(months)
+        .range([0, h])
+      // .padding(0.2)
+
+      let color = d3.scaleOrdinal()
+        .domain(d3.range(0, 10))
+        .range(d3.schemeRdBu[10].reverse())
+
+
+      // let color = d3.schemeCategory10
+      let top = d3.select('.container').append('div')
+      top.append('h1')
+      .attr('id', 'title')
+      .html(`Monthly Global Land-Surface Temperature`)
+      top.append('h2')
+      .attr('id', 'description')
+      .html(`1753 - 2015: base temperature 8.66℃`)
+
+
+      let svgParent = d3.select('.container')
+        .append('svg')
+        .attr('width', w + 2 * p)
+        .attr('height', h + 2 * p)
+
+      
+      let svg = svgParent
+        .append('g')
+        .attr('width', w)
+        .attr('height', h)
+        .attr('transform', `translate(${p}, ${p})`)
+
+      //提示框
+      let tooltip = d3.select('.container')
+        .append('div')
+        .attr('id', 'tooltip')
+
+      //定义x轴
+      var xAxis = d3.axisBottom(xScale)
+        .tickFormat(d3.format(""))
+      svg.append('g')
+        .attr('id', 'x-axis')
+        .attr('transform', `translate(0, ${h})`)
+        .call(xAxis)
+
+
+
+
+
+      //定义y轴
+      var yAxis = d3
+        .axisLeft(yScale)
+      //使用timeFormat函数来转换时间对象
+      // .tickFormat(function (d) {
+      //   return months[d-1]
+      // });
+      svg.append('g')
+        .attr('id', 'y-axis')
+        .call(yAxis)
+
+      //热力图方块
+      svg.selectAll('.cell')
+        .data(data)
+        .enter()
+        .append('rect')
+        .attr('class', 'cell')
+        .attr('x', function (d, i) {
+          return xScale(d.year)
+        })
+        .attr('y', function (d, i) {
+          return yScale(months[d.month - 1])
+        })
+        .attr('width', rectWidth + 'px')
+        .attr('height', yScale.step() + 'px')
+        .attr('fill', (function (d, i) {
+          return color(d.idx)
+        }))
+        .attr('data-month', function (d, i) {
+          return d.month-1
+        })
+        .attr('data-year', function (d, i) {
+          return d.year
+        })
+        .attr('data-temp', function (d, i) {
+          return d.variance + base
+        })
+        .on('mouseover', function(event, d) {
+          console.log(event.pageX, event.pageY)
+          svgParent.style('z-index', 0)
+          tooltip
+          .attr('data-year', d.year)
+          .style('opacity', '100%')
+          .style('left', event.pageX + 'px')
+          .style('top', event.pageY + 'px')
+          .html(JSON.stringify(d))
+        })
+        .on('mouseout', function(event, d) {
+          svgParent.style('z-index', 2)
+          tooltip
+          .style('opacity', '0')
+        })
+
+      let temp = []
+      for (let i = 0; i < 10; i++) {
+        temp.push(i)
+      }
+
+
+      //图表说明框      
+      let legend = d3.select('.container')
+        .append('svg')
+        .attr('id', 'legend')
+
+      let legendXScale = d3.scaleLinear()
+        .domain([_min + base, _max + base])
+        .range([0, 200])
+
+      let legendYScale = d3.scaleLinear()
+        .range([0, 20])
+
+      legend.append('g')
+        .attr('transform', `translate(0, 20)`)
+        .call(d3
+          .axisBottom(legendXScale)
+        )
+
+      legend.append('g')
+        .call(d3.axisLeft(legendYScale))
+
+      legend.append('g')
+        .selectAll('.box')
+        .data(temp)
+        .enter()
+        .append('rect')
+        .attr('class', 'box')
+        .attr('x', function (d, i) {
+          return legendXScale(i * range + _min + base)
+        })
+        .attr('y', function (d, i) {
+          return 0
+        })
+        .attr('width', 20)
+        .attr('height', 20)
+        .attr('fill', function (d, i) {
+          return color(d)
+        })
+
+
+
+    }
+
+  </script>
+</body>
+
+</html>
